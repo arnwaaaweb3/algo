@@ -1,0 +1,6 @@
+data/*.csv
+!data/btc_usdt_1d.csv
+__pycache__/
+.venv/
+*.pyc
+.env
