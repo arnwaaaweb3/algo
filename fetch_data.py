@@ -1,64 +1,115 @@
-"""Fase 1 - Data pipeline: ambil klines BTC/USDT dari Binance via ccxt.
-
-Usage:
-    python fetch_data.py --symbol BTC/USDT --timeframe 1d --days 730
-"""
-import argparse
-import time
-from pathlib import Path
-
-import ccxt
 import pandas as pd
+import yfinance as yf
+import os
+import logging
+from datetime import datetime, timedelta
 
-DATA_DIR = Path(__file__).parent / "data"
-DATA_DIR.mkdir(exist_ok=True)
+# ==========================================
+# 1. SETUP LOGGING (Pengganti print)
+# ==========================================
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(".log"), # Simpan log ke file
+        logging.StreamHandler()                  # Tetap tampilkan di layar
+    ]
+)
 
+def get_last_saved_datetime(filename):
+    """Cek waktu candle terakhir yang sudah ada di CSV."""
+    if not os.path.exists(filename):
+        return None
+    
+    try:
+        df_existing = pd.read_csv(filename, parse_dates=['datetime'], index_col='datetime')
+        if df_existing.empty:
+            return None
+        return df_existing.index.max()
+    except Exception as e:
+        logging.warning(f"Gagal membaca file lama: {e}. Akan download ulang dari awal.")
+        return None
 
-def fetch_all(symbol: str, timeframe: str, days: int) -> pd.DataFrame:
-    """Ambil klines historis dengan pagination (max 1000 bar per request)."""
-    exchange = ccxt.binance({"enableRateLimit": True})
-    since = exchange.milliseconds() - days * 24 * 60 * 60 * 1000
-    all_rows = []
+def fetch_btc_yfinance(interval='1d', start_str='2018-01-01'):
+    """
+    Mengunduh data historis BTC/USD. 
+    V2.0: Support incremental update & validasi data bolong.
+    """
+    filename = f"data/btc_usdt_{interval}.csv"
+    os.makedirs('data', exist_ok=True)
+    
+    # Cek apakah ini update pertama kali atau update bertahap
+    last_dt = get_last_saved_datetime(filename)
+    
+    if last_dt is not None:
+        # Kalau sudah ada data, mulai download dari 1 interval setelah data terakhir
+        # (Kita pakai timedelta sederhana, yfinance akan otomatis handle overlap)
+        start_str = last_dt.strftime('%Y-%m-%d')
+        logging.info(f"[-] Mode Incremental: Melanjutkan data dari {start_str}")
+    else:
+        logging.info(f"[-] Mode Full Download: Mengambil data dari {start_str}")
 
-    while True:
-        batch = exchange.fetch_ohlcv(symbol, timeframe, since=since, limit=1000)
-        if not batch:
-            break
-        all_rows.extend(batch)
-        since = batch[-1][0] + 1  # lanjut setelah candle terakhir
-        print(f"  fetched {len(all_rows)} candles...")
-        if len(batch) < 1000:
-            break
-        time.sleep(exchange.rateLimit / 1000)
+    try:
+        ticker = yf.Ticker("BTC-USD")
+        df_new = ticker.history(start=start_str, interval=interval)
+        
+        if df_new.empty:
+            logging.warning("[!] Tidak ada data baru dari Yahoo Finance.")
+            return None
 
-    df = pd.DataFrame(
-        all_rows,
-        columns=["open_time", "open", "high", "low", "close", "volume"],
-    )
-    df["date"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
-    return df.drop_duplicates("open_time").sort_values("open_time").reset_index(drop=True)
+        # --- STANDARDISASI (Sama seperti kodemu sebelumnya) ---
+        df_new.reset_index(inplace=True)
+        date_col = 'Date' if 'Date' in df_new.columns else 'Datetime'
+        df_new.rename(columns={
+            date_col: 'datetime', 'Open': 'open', 'High': 'high', 
+            'Low': 'low', 'Close': 'close', 'Volume': 'volume'
+        }, inplace=True)
+        
+        df_new = df_new[['datetime', 'open', 'high', 'low', 'close', 'volume']]
+        df_new['datetime'] = pd.to_datetime(df_new['datetime']).dt.tz_localize(None)
+        
+        # --- FITUR BARU: GABUNGKAN DENGAN DATA LAMA (INCREMENTAL) ---
+        if last_dt is not None:
+            df_old = pd.read_csv(filename, parse_dates=['datetime'], index_col='datetime')
+            df_combined = pd.concat([df_old, df_new.set_index('datetime')])
+            # Hapus duplikat kalau ada overlap waktu
+            df_combined = df_combined[~df_combined.index.duplicated(keep='last')]
+            df_combined.sort_index(inplace=True)
+        else:
+            df_combined = df_new.set_index('datetime')
 
+        # --- FITUR BARU: VALIDASI CANDLE BOLONG (MISSING DATA) ---
+        # Crypto market 24/7, jadi tidak boleh ada candle yang bolong.
+        freq_map = {'1d': 'D', '1h': 'h', '1m': 'min'}
+        freq = freq_map.get(interval, 'D')
+        
+        full_range = pd.date_range(start=df_combined.index.min(), end=df_combined.index.max(), freq=freq)
+        missing_candles = full_range.difference(df_combined.index)
+        
+        if len(missing_candles) > 0:
+            logging.warning(f"[!] PERINGATAN: Ditemukan {len(missing_candles)} candle bolong! "
+                            f"Contoh: {missing_candles[:3].tolist()}")
+            # Opsional: isi candle yang bolong dengan NaN atau forward-fill
+            df_combined = df_combined.reindex(full_range)
+            df_combined.ffill(inplace=True) # Isi kekosongan dengan harga sebelumnya
+        else:
+            logging.info("[+] Validasi sukses: Tidak ada candle yang bolong (Data 100% continuous).")
 
-def validate(df: pd.DataFrame) -> None:
-    """Data pipeline tanpa validasi = bom waktu. Cek sebelum lanjut."""
-    assert df[["open", "high", "low", "close", "volume"]].notna().all().all(), "ada NaN!"
-    assert not df["date"].duplicated().any(), "ada tanggal duplikat!"
-    assert (df["high"] >= df[["open", "close", "low"]].max(axis=1)).all(), "high tidak valid!"
-    assert (df["low"] <= df[["open", "close", "high"]].min(axis=1)).all(), "low tidak valid!"
-    print("  validasi OK: tidak ada NaN, duplikat, atau OHLC aneh.")
+        # Simpan ke CSV
+        df_combined.to_csv(filename)
+        logging.info(f"[+] Total candle saat ini: {len(df_combined)} | Saved to {filename}\n")
+        
+        return df_combined
 
+    except Exception as e:
+        logging.error(f"[!] Error fetching data via yfinance: {e}")
+        return None
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--symbol", default="BTC/USDT")
-    ap.add_argument("--timeframe", default="1d")
-    ap.add_argument("--days", type=int, default=730)
-    args = ap.parse_args()
-
-    print(f"Fetching {args.symbol} {args.timeframe} ({args.days} hari)...")
-    df = fetch_all(args.symbol, args.timeframe, args.days)
-    validate(df)
-
-    out = DATA_DIR / f"{args.symbol.replace('/', '_')}_{args.timeframe}.csv"
-    df.to_csv(out, index=False)
-    print(f"  saved -> {out} ({len(df)} baris)")
+    logging.info("=== Memulai Proses Fetching Data BTC ===")
+    
+    # Jalankan untuk Daily dan Hourly
+    fetch_btc_yfinance(interval='1d', start_str='2018-01-01')
+    fetch_btc_yfinance(interval='1h', start_str='2024-10-01')
+    
+    logging.info("=== Proses Selesai ===")

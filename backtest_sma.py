@@ -17,17 +17,19 @@ FEE = 0.001        # 0.1% per transaksi (taker Binance)
 SLIPPAGE = 0.0005  # 0.05% slippage per transaksi
 FAST, SLOW = 20, 50
 
-
 def load() -> pd.DataFrame:
     df = pd.read_csv(DATA)
-    if "date" in df.columns:
+    # Kompatibel dengan output fetch_data.py (kolom 'datetime' sebagai index)
+    if df.index.name == "datetime" or "datetime" in df.columns:
+        df = df.reset_index()
+        df["date"] = pd.to_datetime(df["datetime"])
+    elif "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"])
     elif "open_time_formatted" in df.columns:
         df["date"] = pd.to_datetime(df["open_time_formatted"])
     else:
         df["date"] = pd.to_datetime(df["open_time"], unit="ms", utc=True)
     return df.sort_values("date").reset_index(drop=True)
-
 
 def backtest(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     df = df.copy()

@@ -1,0 +1,29 @@
+2026-09-16 16:17:51,606 - INFO - === Memulai Proses Fetching Data BTC ===
+2026-09-16 16:17:51,705 - INFO - [-] Mode Incremental: Melanjutkan data dari 2026-09-16
+2026-09-16 16:17:52,365 - INFO - [+] Validasi sukses: Tidak ada candle yang bolong (Data 100% continuous).
+2026-09-16 16:17:52,396 - INFO - [+] Total candle saat ini: 3181 | Saved to data/btc_usdt_1d.csv
+
+2026-09-16 16:17:52,482 - INFO - [-] Mode Incremental: Melanjutkan data dari 2026-09-16
+2026-09-16 16:17:52,709 - ERROR - [!] Error fetching data via yfinance: Invalid frequency: H. Failed to parse with error message: ValueError("Invalid frequency: H. Failed to parse with error message: KeyError('H'). Did you mean h?") Did you mean h?
+2026-09-16 16:17:52,728 - INFO - === Proses Selesai ===
+2026-09-16 16:20:24,953 - INFO - === Memulai Proses Fetching Data BTC ===
+2026-09-16 16:20:24,992 - INFO - [-] Mode Incremental: Melanjutkan data dari 2026-09-16
+2026-09-16 16:20:25,466 - INFO - [+] Validasi sukses: Tidak ada candle yang bolong (Data 100% continuous).
+2026-09-16 16:20:25,507 - INFO - [+] Total candle saat ini: 3181 | Saved to data/btc_usdt_1d.csv
+
+2026-09-16 16:20:25,587 - INFO - [-] Mode Incremental: Melanjutkan data dari 2026-09-16
+2026-09-16 16:20:25,769 - WARNING - [!] PERINGATAN: Ditemukan 33 candle bolong! Contoh: [Timestamp('2025-01-02 14:00:00'), Timestamp('2025-10-28 03:00:00'), Timestamp('2025-10-28 04:00:00')]
+2026-09-16 16:20:25,976 - INFO - [+] Total candle saat ini: 17170 | Saved to data/btc_usdt_1h.csv
+
+2026-09-16 16:20:25,977 - INFO - === Proses Selesai ===
+2026-09-19 00:21:26,040 - INFO - === Memulai Proses Fetching Data BTC ===
+2026-09-19 00:21:27,101 - INFO - [-] Mode Incremental: Melanjutkan data dari 2026-09-16
+2026-09-19 00:21:29,027 - INFO - [+] Validasi sukses: Tidak ada candle yang bolong (Data 100% continuous).
+2026-09-19 00:21:29,139 - INFO - [+] Total candle saat ini: 3183 | Saved to data/btc_usdt_1d.csv
+
+2026-09-19 00:21:29,221 - WARNING - Gagal membaca file lama: Missing column provided to 'parse_dates': 'datetime'. Akan download ulang dari awal.
+2026-09-19 00:21:29,222 - INFO - [-] Mode Full Download: Mengambil data dari 2024-10-01
+2026-09-19 00:21:30,004 - WARNING - [!] PERINGATAN: Ditemukan 33 candle bolong! Contoh: [Timestamp('2025-01-02 14:00:00'), Timestamp('2025-10-28 03:00:00'), Timestamp('2025-10-28 04:00:00')]
+2026-09-19 00:21:30,758 - INFO - [+] Total candle saat ini: 17226 | Saved to data/btc_usdt_1h.csv
+
+2026-09-19 00:21:30,786 - INFO - === Proses Selesai ===
